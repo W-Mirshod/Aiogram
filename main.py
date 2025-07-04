@@ -24,6 +24,38 @@ LANGUAGES = [
     ("Oʻzbek", "uz")
 ]
 
+user_states = {}
+
+LANG_TEXTS = {
+    "en": {
+        "choose_lang": "Choose your language:",
+        "set_lang": "Language set to English. What topic is your question about?",
+        "ask_question": "What is your question?",
+        "limit": "Daily limit reached (3 queries per day). Try again tomorrow.",
+        "start": "Other users and their queries:",
+        "no_users": "No other users yet.",
+        "start_first": "Please use /start to begin."
+    },
+    "ru": {
+        "choose_lang": "Выберите язык:",
+        "set_lang": "Язык установлен на Русский. О какой теме ваш вопрос?",
+        "ask_question": "Ваш вопрос?",
+        "limit": "Достигнут дневной лимит (3 запроса в день). Попробуйте завтра.",
+        "start": "Другие пользователи и их вопросы:",
+        "no_users": "Пока нет других пользователей.",
+        "start_first": "Пожалуйста, используйте /start для начала."
+    },
+    "uz": {
+        "choose_lang": "Tilni tanlang:",
+        "set_lang": "Til Oʻzbek tiliga oʻzgartirildi. Savolingiz qaysi mavzuda?",
+        "ask_question": "Savolingizni yozing:",
+        "limit": "Kunlik limitga yetdingiz (kuniga 3 ta soʻrov). Ertaga urinib koʻring.",
+        "start": "Boshqa foydalanuvchilar va ularning so'rovlari:",
+        "no_users": "Hali boshqa foydalanuvchilar yoʻq.",
+        "start_first": "/start buyrug'ini yuboring."
+    }
+}
+
 async def init_db():
     async with aiosqlite.connect("bot.db") as db:
         await db.execute("""
@@ -57,7 +89,7 @@ async def start_handler(message: types.Message):
         await db.commit()
         cursor = await db.execute("SELECT user_id, username FROM users WHERE user_id != ?", (user_id,))
         users = await cursor.fetchall()
-        text = "Other users and their queries:\n"
+        text = LANG_TEXTS["en"]["start"] + "\n"
         for u in users:
             uid, uname = u
             text += f"User: {uname or uid}\n"
@@ -66,13 +98,23 @@ async def start_handler(message: types.Message):
             for q in qs:
                 text += f"- {q[0]}\n"
         if len(users) == 0:
-            text = "No other users yet."
+            text = LANG_TEXTS["en"]["no_users"]
     kb = ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text=lang)] for lang, code in LANGUAGES],
         resize_keyboard=True
     )
     await message.answer(text, reply_markup=kb)
-    await message.answer("Choose your language:", reply_markup=kb)
+    await message.answer(LANG_TEXTS["en"]["choose_lang"], reply_markup=kb)
+
+async def check_daily_limit(user_id: int) -> bool:
+    today = datetime.datetime.utcnow().date().isoformat()
+    async with aiosqlite.connect("bot.db") as db:
+        cur = await db.execute(
+            "SELECT COUNT(*) FROM queries WHERE user_id = ? AND created_at >= ?",
+            (user_id, today)
+        )
+        count = (await cur.fetchone())[0]
+        return count >= 3
 
 @dp.message()
 async def handle_message(message: types.Message):
@@ -81,47 +123,50 @@ async def handle_message(message: types.Message):
     async with aiosqlite.connect("bot.db") as db:
         cur = await db.execute("SELECT language FROM users WHERE user_id = ?", (user_id,))
         row = await cur.fetchone()
+        lang_code = row[0] if row and row[0] else "en"
         if row and not row[0]:
             for lang, code in LANGUAGES:
                 if text == lang:
                     await db.execute("UPDATE users SET language = ? WHERE user_id = ?", (code, user_id))
                     await db.commit()
-                    await message.answer(f"Language set to {lang}. What topic is your question about?")
+                    await message.answer(LANG_TEXTS[code]["set_lang"])
+                    user_states[user_id] = {"awaiting_question": True}
                     return
         elif row is None:
-            await message.answer("Please use /start to begin.")
+            await message.answer(LANG_TEXTS["en"]["start_first"])
             return
         else:
-            # Check daily limit
-            today = datetime.datetime.utcnow().date().isoformat()
-            cur = await db.execute(
-                "SELECT COUNT(*) FROM queries WHERE user_id = ? AND created_at >= ?",
-                (user_id, today)
-            )
-            count = (await cur.fetchone())[0]
-            if count >= 3:
-                await message.answer("Daily limit reached (3 queries per day). Try again tomorrow.")
+            if await check_daily_limit(user_id):
+                await message.answer(LANG_TEXTS[lang_code]["limit"])
+                user_states.pop(user_id, None)
                 return
-            await message.answer("What is your question?")
-            dp.data[user_id] = {"awaiting_question": True}
-            return
-
-    if dp.data.get(user_id, {}).get("awaiting_question"):
-        dp.data[user_id]["awaiting_question"] = False
-        question = text
-        # OpenAI API call
-        response = await openai.ChatCompletion.acreate(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": question}]
-        )
-        answer = response.choices[0].message.content.strip()
-        async with aiosqlite.connect("bot.db") as db:
-            await db.execute(
-                "INSERT INTO queries (user_id, query, answer, created_at) VALUES (?, ?, ?, ?)",
-                (user_id, question, answer, datetime.datetime.utcnow().isoformat())
+            if not user_states.get(user_id, {}).get("awaiting_question"):
+                await message.answer(LANG_TEXTS[lang_code]["ask_question"])
+                user_states[user_id] = {"awaiting_question": True}
+                return
+            question = text
+            user_states.pop(user_id, None)
+            system_prompt = {
+                "en": "Answer in English.",
+                "ru": "Отвечай на русском языке.",
+                "uz": "Javobni o'zbek tilida yozing."
+            }[lang_code]
+            response = await openai.ChatCompletion.acreate(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": question}
+                ]
             )
-            await db.commit()
-        await message.answer(answer)
+            answer = response.choices[0].message.content.strip()
+            async with aiosqlite.connect("bot.db") as db:
+                await db.execute(
+                    "INSERT INTO queries (user_id, query, answer, created_at) VALUES (?, ?, ?, ?)",
+                    (user_id, question, answer, datetime.datetime.utcnow().isoformat())
+                )
+                await db.commit()
+            await message.answer(answer)
+            return
 
 async def main():
     await init_db()
