@@ -18,7 +18,7 @@ openai.api_key = OPENAI_API_KEY
 
 client = AzureOpenAI(
     api_version="2024-12-01-preview",
-    azure_endpoint="https://ai-yaklabs030481018215.cognitiveservices.azure.com/",
+    azure_endpoint=OPENAI_API_URL,
     api_key=OPENAI_API_KEY,
 )
 
@@ -128,15 +128,25 @@ async def handle_message(message: types.Message):
                     await db.commit()
                     await message.answer(LANG_TEXTS[code]["set_lang"])
                     await message.answer(LANG_TEXTS[code]["ask_question"])
-                    user_states[user_id] = {"awaiting_question": True}
+                    user_states[user_id] = {"awaiting_question": True, "lang_code": code}
                     return
         elif row is None:
             await message.answer(LANG_TEXTS["en"]["start_first"])
             return
         else:
+            # Check for language selection at any time
+            for lang, code in LANGUAGES:
+                if text == lang:
+                    await db.execute("UPDATE users SET language = ? WHERE user_id = ?", (code, user_id))
+                    await db.commit()
+                    await message.answer(LANG_TEXTS[code]["set_lang"])
+                    await message.answer(LANG_TEXTS[code]["ask_question"])
+                    user_states[user_id] = {"awaiting_question": True, "lang_code": code}
+                    return
+            
             if not user_states.get(user_id, {}).get("awaiting_question"):
                 await message.answer(LANG_TEXTS[lang_code]["ask_question"])
-                user_states[user_id] = {"awaiting_question": True}
+                user_states[user_id] = {"awaiting_question": True, "lang_code": lang_code}
                 return
             if await check_minute_limit(user_id):
                 await message.answer(LANG_TEXTS[lang_code]["limit"])
@@ -144,9 +154,9 @@ async def handle_message(message: types.Message):
             question = text
             user_states.pop(user_id, None)
             system_prompt = {
-                "en": "Answer in English.",
-                "ru": "Отвечай на русском языке.",
-                "uz": "Javobni o'zbek tilida yozing."
+                "en": "Always answer in English, regardless of the question language.",
+                "ru": "Всегда отвечай только на русском языке, независимо от языка вопроса.",
+                "uz": "Har doim faqat o'zbek tilida javob ber, savol qaysi tilda bo'lishidan qat'i nazar."
             }[lang_code]
             response = client.chat.completions.create(
                 model="o4-mini",
@@ -163,7 +173,7 @@ async def handle_message(message: types.Message):
                 )
                 await db.commit()
             await message.answer(answer)
-            user_states[user_id] = {"awaiting_question": True}
+            user_states[user_id] = {"awaiting_question": True, "lang_code": lang_code}
             return
 
 async def check_minute_limit(user_id: int) -> bool:
