@@ -7,6 +7,7 @@ import openai
 import datetime
 from dotenv import load_dotenv
 import os
+from openai import AzureOpenAI
 
 load_dotenv()
 
@@ -14,6 +15,12 @@ API_TOKEN = os.getenv('API_TOKEN')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 OPENAI_API_URL = os.getenv('OPENAI_API_URL')
 openai.api_key = OPENAI_API_KEY
+
+client = AzureOpenAI(
+    api_version="2024-12-01-preview",
+    azure_endpoint="https://ai-yaklabs030481018215.cognitiveservices.azure.com/",
+    api_key=OPENAI_API_KEY,
+)
 
 dp = Dispatcher()
 bot = Bot(token=API_TOKEN)
@@ -106,16 +113,6 @@ async def start_handler(message: types.Message):
     await message.answer(text, reply_markup=kb)
     await message.answer(LANG_TEXTS["en"]["choose_lang"], reply_markup=kb)
 
-async def check_daily_limit(user_id: int) -> bool:
-    today = datetime.datetime.utcnow().date().isoformat()
-    async with aiosqlite.connect("bot.db") as db:
-        cur = await db.execute(
-            "SELECT COUNT(*) FROM queries WHERE user_id = ? AND created_at >= ?",
-            (user_id, today)
-        )
-        count = (await cur.fetchone())[0]
-        return count >= 3
-
 @dp.message()
 async def handle_message(message: types.Message):
     user_id = message.from_user.id
@@ -130,19 +127,19 @@ async def handle_message(message: types.Message):
                     await db.execute("UPDATE users SET language = ? WHERE user_id = ?", (code, user_id))
                     await db.commit()
                     await message.answer(LANG_TEXTS[code]["set_lang"])
+                    await message.answer(LANG_TEXTS[code]["ask_question"])
                     user_states[user_id] = {"awaiting_question": True}
                     return
         elif row is None:
             await message.answer(LANG_TEXTS["en"]["start_first"])
             return
         else:
-            if await check_daily_limit(user_id):
-                await message.answer(LANG_TEXTS[lang_code]["limit"])
-                user_states.pop(user_id, None)
-                return
             if not user_states.get(user_id, {}).get("awaiting_question"):
                 await message.answer(LANG_TEXTS[lang_code]["ask_question"])
                 user_states[user_id] = {"awaiting_question": True}
+                return
+            if await check_minute_limit(user_id):
+                await message.answer(LANG_TEXTS[lang_code]["limit"])
                 return
             question = text
             user_states.pop(user_id, None)
@@ -151,8 +148,8 @@ async def handle_message(message: types.Message):
                 "ru": "Отвечай на русском языке.",
                 "uz": "Javobni o'zbek tilida yozing."
             }[lang_code]
-            response = await openai.ChatCompletion.acreate(
-                model="gpt-3.5-turbo",
+            response = client.chat.completions.create(
+                model="o4-mini",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": question}
@@ -166,7 +163,19 @@ async def handle_message(message: types.Message):
                 )
                 await db.commit()
             await message.answer(answer)
+            user_states[user_id] = {"awaiting_question": True}
             return
+
+async def check_minute_limit(user_id: int) -> bool:
+    now = datetime.datetime.utcnow()
+    one_minute_ago = (now - datetime.timedelta(minutes=1)).isoformat()
+    async with aiosqlite.connect("bot.db") as db:
+        cur = await db.execute(
+            "SELECT COUNT(*) FROM queries WHERE user_id = ? AND created_at >= ?",
+            (user_id, one_minute_ago)
+        )
+        count = (await cur.fetchone())[0]
+        return count >= 3
 
 async def main():
     await init_db()
