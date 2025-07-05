@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body>
+    <div class="navbar">
+        <span class="navbar-title">W Mirshod</span>
+        <div class="theme-switch">
+            <button class="theme-btn" id="themeBtn" aria-label="Switch theme"><span class="circle"></span></button>
+        </div>
+    </div>
+    <div class="container">
+        <h1>Admin Dashboard</h1>
+        <div id="users"></div>
+    </div>
+    <script>
+    async function loadUsers() {
+        const res = await fetch('/dashboard-data');
+        const data = await res.json();
+        let html = '';
+        for (const user of data) {
+            html += `<div class='user-block'>`;
+            let joinedDate = user.joined && user.joined !== '-' ? new Date(user.joined).toLocaleString() : '-';
+            html += `<h2>${user.username || user.user_id} <span class='meta'>(ID: ${user.user_id}, Lang: ${user.language || '-'}, Joined: ${joinedDate})</span></h2>`;
+            html += `<div class='meta'>Queries in last minute: <span class='limit'>${user.limit_count}/3</span></div>`;
+            html += `<div><b>Questions:</b><ul>`;
+            for (const q of user.queries) {
+                let qDate = q[1] && q[1] !== '-' ? new Date(q[1]).toLocaleString() : '-';
+                html += `<li>${qDate}: ${q[0]}</li>`;
+            }
+            html += `</ul></div></div>`;
+        }
+        document.getElementById('users').innerHTML = html;
+    }
+    loadUsers();
+    window.addEventListener('DOMContentLoaded', function() {
+        const themeBtn = document.getElementById('themeBtn');
+        function setTheme(night) {
+            document.body.classList.toggle('night', night);
+            themeBtn.classList.toggle('night', night);
+            localStorage.setItem('night', night ? '1' : '0');
+        }
+        themeBtn.addEventListener('click', function() {
+            setTheme(!document.body.classList.contains('night'));
+        });
+        if (localStorage.getItem('night') === '1') setTheme(true);
+        else setTheme(false);
+    });
+    </script>
+</body>
+</html>

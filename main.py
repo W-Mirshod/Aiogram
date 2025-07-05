@@ -38,7 +38,7 @@ LANG_TEXTS = {
         "choose_lang": "Choose your language:",
         "set_lang": "Language set to English. What topic is your question about?",
         "ask_question": "What is your question?",
-        "limit": "Daily limit reached (3 queries per day). Try again tomorrow.",
+        "limit": "Limit reached (3 queries per minute). Try again in a minute.",
         "start": "Other users and their queries:",
         "no_users": "No other users yet.",
         "start_first": "Please use /start to begin."
@@ -47,7 +47,7 @@ LANG_TEXTS = {
         "choose_lang": "Выберите язык:",
         "set_lang": "Язык установлен на Русский. О какой теме ваш вопрос?",
         "ask_question": "Ваш вопрос?",
-        "limit": "Достигнут дневной лимит (3 запроса в день). Попробуйте завтра.",
+        "limit": "Достигнут лимит (3 запроса в минуту). Попробуйте через минуту.",
         "start": "Другие пользователи и их вопросы:",
         "no_users": "Пока нет других пользователей.",
         "start_first": "Пожалуйста, используйте /start для начала."
@@ -56,7 +56,7 @@ LANG_TEXTS = {
         "choose_lang": "Tilni tanlang:",
         "set_lang": "Til Oʻzbek tiliga oʻzgartirildi. Savolingiz qaysi mavzuda?",
         "ask_question": "Savolingizni yozing:",
-        "limit": "Kunlik limitga yetdingiz (kuniga 3 ta soʻrov). Ertaga urinib koʻring.",
+        "limit": "Limitga yetdingiz (har daqiqada 3 ta so'rov). Bir daqiqadan so'ng urinib ko'ring.",
         "start": "Boshqa foydalanuvchilar va ularning so'rovlari:",
         "no_users": "Hali boshqa foydalanuvchilar yoʻq.",
         "start_first": "/start buyrug'ini yuboring."

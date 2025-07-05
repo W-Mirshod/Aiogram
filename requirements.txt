@@ -2,3 +2,5 @@ aiogram
 aiosqlite
 openai
 python-dotenv
+fastapi
+uvicorn
