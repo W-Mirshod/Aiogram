@@ -1,9 +1,9 @@
-# Aiogram OpenAI Telegram Bot
+# Aiogram Gemini Telegram Bot
 
 ## Features
 - User registration and language selection (English, Russian, Uzbek)
-- Topic prompt and OpenAI API integration for answers
-- 3 queries per user per day (daily limit)
+- Topic prompt and Google Gemini API integration for answers
+- 3 queries per user per minute (rate limit)
 - All queries and answers saved in SQLite database
 - Shows other users and their queries on /start
 - Docker and Docker Compose support
@@ -19,8 +19,7 @@
 2. Create a `.env` file with your credentials:
    ```env
    API_TOKEN=your_telegram_bot_token
-   OPENAI_API_KEY=your_openai_api_key
-   OPENAI_API_URL=your_openai_api_url
+   GEMINI_API_KEY=your_gemini_api_key
    ```
 
 3. (Optional) Install dependencies locally:

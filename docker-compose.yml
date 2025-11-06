@@ -4,8 +4,7 @@ services:
     build: .
     environment:
       - API_TOKEN=${API_TOKEN}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_API_URL=${OPENAI_API_URL}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     volumes:
       - .:/app
     command: python main.py

@@ -3,24 +3,20 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.filters import Command
 import aiosqlite
-import openai
 import datetime
 from dotenv import load_dotenv
 import os
-from openai import AzureOpenAI
+import google.generativeai as genai
 
 load_dotenv()
 
 API_TOKEN = os.getenv('API_TOKEN')
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-OPENAI_API_URL = os.getenv('OPENAI_API_URL')
-openai.api_key = OPENAI_API_KEY
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
-client = AzureOpenAI(
-    api_version="2024-12-01-preview",
-    azure_endpoint=OPENAI_API_URL,
-    api_key=OPENAI_API_KEY,
-)
+if not GEMINI_API_KEY:
+    raise ValueError("GEMINI_API_KEY environment variable is not set")
+
+genai.configure(api_key=GEMINI_API_KEY)
 
 dp = Dispatcher()
 bot = Bot(token=API_TOKEN)
@@ -158,22 +154,40 @@ async def handle_message(message: types.Message):
                 "ru": "Всегда отвечай только на русском языке, независимо от языка вопроса.",
                 "uz": "Har doim faqat o'zbek tilida javob ber, savol qaysi tilda bo'lishidan qat'i nazar."
             }[lang_code]
-            response = client.chat.completions.create(
-                model="o4-mini",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": question}
-                ]
-            )
-            answer = response.choices[0].message.content.strip()
-            async with aiosqlite.connect("bot.db") as db:
-                await db.execute(
-                    "INSERT INTO queries (user_id, query, answer, created_at) VALUES (?, ?, ?, ?)",
-                    (user_id, question, answer, datetime.datetime.utcnow().isoformat())
-                )
-                await db.commit()
-            await message.answer(answer)
-            user_states[user_id] = {"awaiting_question": True, "lang_code": lang_code}
+            
+            try:
+                model = genai.GenerativeModel('gemini-2.0-flash-exp')
+                prompt = f"{system_prompt}\n\nUser question: {question}"
+                response = model.generate_content(prompt)
+                
+                if not response or not hasattr(response, 'text'):
+                    error_msg = {
+                        "en": "Sorry, I couldn't generate a response. Please try again.",
+                        "ru": "Извините, не удалось сгенерировать ответ. Попробуйте еще раз.",
+                        "uz": "Kechirasiz, javob yaratib bo'lmadi. Qayta urinib ko'ring."
+                    }[lang_code]
+                    await message.answer(error_msg)
+                    user_states[user_id] = {"awaiting_question": True, "lang_code": lang_code}
+                    return
+                
+                answer = response.text.strip()
+                
+                async with aiosqlite.connect("bot.db") as db:
+                    await db.execute(
+                        "INSERT INTO queries (user_id, query, answer, created_at) VALUES (?, ?, ?, ?)",
+                        (user_id, question, answer, datetime.datetime.utcnow().isoformat())
+                    )
+                    await db.commit()
+                await message.answer(answer)
+                user_states[user_id] = {"awaiting_question": True, "lang_code": lang_code}
+            except Exception as e:
+                error_msg = {
+                    "en": f"Sorry, an error occurred: {str(e)}. Please try again.",
+                    "ru": f"Извините, произошла ошибка: {str(e)}. Попробуйте еще раз.",
+                    "uz": f"Kechirasiz, xatolik yuz berdi: {str(e)}. Qayta urinib ko'ring."
+                }[lang_code]
+                await message.answer(error_msg)
+                user_states[user_id] = {"awaiting_question": True, "lang_code": lang_code}
             return
 
 async def check_minute_limit(user_id: int) -> bool:

@@ -1,6 +1,6 @@
 aiogram
 aiosqlite
-openai
+google-generativeai
 python-dotenv
 fastapi
 uvicorn
