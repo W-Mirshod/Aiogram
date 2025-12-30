@@ -6,7 +6,7 @@ import aiosqlite
 import datetime
 from dotenv import load_dotenv
 import os
-import google.generativeai as genai
+from google import genai
 
 load_dotenv()
 
@@ -16,7 +16,8 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 if not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY environment variable is not set")
 
-genai.configure(api_key=GEMINI_API_KEY)
+# Initialize the client
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 dp = Dispatcher()
 bot = Bot(token=API_TOKEN)
@@ -156,11 +157,13 @@ async def handle_message(message: types.Message):
             }[lang_code]
             
             try:
-                model = genai.GenerativeModel('gemini-2.0-flash-exp')
                 prompt = f"{system_prompt}\n\nUser question: {question}"
-                response = model.generate_content(prompt)
-                
-                if not response or not hasattr(response, 'text'):
+                response = client.models.generate_content(
+                    model='gemini-flash-latest',
+                    contents=prompt
+                )
+
+                if not response or not response.text:
                     error_msg = {
                         "en": "Sorry, I couldn't generate a response. Please try again.",
                         "ru": "Извините, не удалось сгенерировать ответ. Попробуйте еще раз.",
