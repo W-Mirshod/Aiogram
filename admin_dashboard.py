@@ -1,22 +1,43 @@
-
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 import aiosqlite
 import datetime
+import os
+import secrets
 import uvicorn
-
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
+security = HTTPBasic()
+
+
+def require_admin(credentials: HTTPBasicCredentials = Depends(security)):
+    password = os.getenv("ADMIN_PASSWORD")
+    if not password:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="ADMIN_PASSWORD is not configured",
+        )
+    user_ok = secrets.compare_digest(credentials.username, "admin")
+    pass_ok = secrets.compare_digest(credentials.password, password)
+    if not (user_ok and pass_ok):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
 
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
+async def dashboard(request: Request, _: str = Depends(require_admin)):
     return FileResponse("static/dashboard.html")
 
+
 @app.get("/dashboard-data", response_class=JSONResponse)
-async def dashboard_data():
+async def dashboard_data(_: str = Depends(require_admin)):
     async with aiosqlite.connect("bot.db") as db:
         users = await db.execute("SELECT user_id, username, language FROM users")
         users = await users.fetchall()

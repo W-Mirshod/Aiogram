@@ -16,11 +16,14 @@
    cd Aiogram
    ```
 
-2. Create a `.env` file with your credentials:
+2. Copy `.env.example` to `.env` and fill in credentials:
    ```env
    API_TOKEN=your_telegram_bot_token
    GEMINI_API_KEY=your_gemini_api_key
+   ADMIN_PASSWORD=change_me
    ```
+
+   Never commit `.env`. If a token was ever pushed to git, revoke it in @BotFather and rotate keys.
 
 3. (Optional) Install dependencies locally:
    ```bash
@@ -44,3 +47,5 @@
 ## Notes
 - The database file `bot.db` is created automatically and ignored by git.
 - Make sure your `.env` file is present before running.
+- Admin dashboard (`:10102`) requires HTTP Basic auth user `admin` + `ADMIN_PASSWORD`.
+- On boot the bot deletes any active Telegram webhook so polling is not hijacked.

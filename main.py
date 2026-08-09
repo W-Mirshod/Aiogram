@@ -204,8 +204,21 @@ async def check_minute_limit(user_id: int) -> bool:
         count = (await cur.fetchone())[0]
         return count >= 3
 
+async def reclaim_bot_control():
+    me = await bot.get_me()
+    webhook = await bot.get_webhook_info()
+    if webhook.url:
+        print(f"WARNING: foreign webhook active url={webhook.url} ip={webhook.ip_address}")
+        await bot.delete_webhook(drop_pending_updates=False)
+        print("Deleted webhook so polling can run. Rotate API_TOKEN if this was unexpected.")
+    name = (me.first_name or "").lower()
+    if "casino" in name or "xstake" in name or "xatakoro" in name:
+        print(f"WARNING: bot display name looks hijacked: {me.first_name!r}")
+        print("Revoke the token in @BotFather immediately; git history leaked API_TOKEN.")
+
 async def main():
     await init_db()
+    await reclaim_bot_control()
     await dp.start_polling(bot)
 
 if __name__ == "__main__":

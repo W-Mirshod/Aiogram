@@ -10,6 +10,8 @@ services:
     command: python main.py
   admin_dashboard:
     build: .
+    environment:
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
     ports:
       - "10102:10102"
     volumes:
