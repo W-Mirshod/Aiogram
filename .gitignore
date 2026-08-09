@@ -3,11 +3,12 @@ __pycache__/
 *.pyo
 *.pyd
 .env
+.env.*
+!.env.example
 bot.db
 db.sqlite3
 *.sqlite3
 *.log
-.env.*
 .idea/
 .vscode/
 .DS_Store
@@ -16,7 +17,4 @@ db.sqlite3
 *.swp
 *.swo
 *.~
-.env
-.env
-venv
 venv/
